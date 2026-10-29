@@ -77,22 +77,7 @@ h1 {
   text-wrap: balance;
 }
 h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: -0.01em; }
-.who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 16px; color: var(--muted); }
-.who span { min-width: 0; overflow-wrap: anywhere; }
-
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; }
-
-/* Sign-in */
-.auth { padding: 28px 24px; max-width: 520px; display: flex; flex-direction: column; gap: 18px; }
-.auth .field + .field { margin-top: 0; }
-.auth form { display: flex; flex-direction: column; gap: 16px; }
-.auth .btn { width: 100%; }
-.auth-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.linkbtn { border: 0; background: none; padding: 8px 0; color: var(--accent-text); font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.linkbtn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-.msg { font-size: 16px; color: var(--red); }
-.msg.ok { color: var(--fg); }
-.hint { font-size: 16px; color: var(--muted); }
 
 /* Summary */
 .summary { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
@@ -237,7 +222,6 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
 @media (max-width: 560px) {
   body { padding-top: 28px; font-size: 17px; }
   .summary, .add { padding: 18px; }
-  .auth { padding: 22px 18px; }
   .fields { grid-template-columns: minmax(0, 1fr); }
   .add .btn { width: 100%; }
   .stat { padding: 4px 12px; }
@@ -256,47 +240,15 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
   <header class="top">
     <p class="today" id="today"></p>
     <h1>Meeting Action Tracker</h1>
-    <div class="who" id="who" hidden>
-      <span id="who-email"></span>
-      <button type="button" class="btn-ghost sm" id="signout">Sign out</button>
-    </div>
   </header>
 
-  <!-- Loading / library failure -->
-  <section class="card empty" id="boot" role="status">
-    <strong id="boot-title">Loading</strong>
-    <span id="boot-text">Checking your sign-in.</span>
+  <!-- Shown only if the Supabase library fails to load -->
+  <section class="card empty" id="boot" role="status" hidden>
+    <strong id="boot-title">Could not load the page</strong>
+    <span id="boot-text"></span>
   </section>
 
-  <!-- Sign in, create account, choose a new password -->
-  <section class="card auth" id="auth" hidden aria-labelledby="auth-title">
-    <h2 id="auth-title">Sign in</h2>
-    <p class="hint" id="auth-hint">Use your @thakralone.com email address.</p>
-    <form id="auth-form" novalidate>
-      <div class="field" id="auth-email-field">
-        <label for="auth-email">Email</label>
-        <input type="email" id="auth-email" autocomplete="email" inputmode="email" placeholder="you@thakralone.com">
-      </div>
-      <div class="field">
-        <label for="auth-pw">Password</label>
-        <input type="password" id="auth-pw" autocomplete="current-password" minlength="8">
-      </div>
-      <p class="msg" id="auth-msg" role="alert" hidden></p>
-      <button type="submit" class="btn" id="auth-submit">Sign in</button>
-    </form>
-    <div class="auth-links" id="auth-links">
-      <button type="button" class="linkbtn" id="auth-toggle">New here? Create an account</button>
-      <button type="button" class="linkbtn" id="auth-forgot">Forgot your password?</button>
-    </div>
-  </section>
-
-  <!-- Signed in but not on the allowed list -->
-  <section class="card empty" id="denied" hidden role="status">
-    <strong>This account does not have access</strong>
-    <span id="denied-text"></span>
-  </section>
-
-  <div id="app" hidden>
+  <div id="app">
     <section class="card summary" aria-label="Summary">
       <div class="stats">
         <div class="stat"><span class="num" id="n-open">&ndash;</span><span class="lbl">Open</span></div>
@@ -362,11 +314,10 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
 (function () {
   'use strict';
 
-  /* Project settings. The publishable key is meant to be public: the database rules
-     (row-level security) only let confirmed team accounts read or change anything. */
+  /* Project settings. This version is open: anyone who has the link can read and change every action.
+     The publishable key is public by design; the database rules let it touch only the meeting_actions table. */
   var SUPABASE_URL = 'https://jeerscukwmcawmoddoax.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_JkOIq3bGF5fHrFLVFwfRNg_p19u-bcW';
-  var EMAIL_DOMAIN_HINT = 'thakralone.com';   // display hint only; the database decides who gets in
 
   var FILTER_KEY = 'meeting-action-tracker.filter';
   var POLL_MS = 60000;
@@ -374,12 +325,10 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
   var sb = (window.supabase && window.supabase.createClient)
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
     : null;
 
-  var view = 'loading';            // loading | signin | recovery | denied | app
-  var authMode = 'signin';         // signin | signup | reset
-  var currentUserId = null;
+  var view = 'app';                // app | error
   var channel = null;
   var rtTimer = null;
   var actions = [];
@@ -420,134 +369,11 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
   }
   function clock(d) { return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
 
-  /* ---------- views ---------- */
-  function setView(v) {
-    view = v;
-    $('boot').hidden = v !== 'loading' || !!sbFailure;
-    $('auth').hidden = !(v === 'signin' || v === 'recovery');
-    $('denied').hidden = v !== 'denied';
-    $('app').hidden = v !== 'app';
-    $('who').hidden = !(v === 'app' || v === 'denied');
-  }
-  var sbFailure = false;
-
-  /* ---------- sign-in ---------- */
-  function authMsg(text, ok) {
-    var m = $('auth-msg');
-    m.textContent = text || '';
-    m.className = 'msg' + (ok ? ' ok' : '');
-    m.hidden = !text;
-  }
-  function setAuthMode(keepMsg) {
-    var reset = authMode === 'reset', signup = authMode === 'signup';
-    $('auth-title').textContent = reset ? 'Choose a new password' : signup ? 'Create your account' : 'Sign in';
-    $('auth-hint').textContent = reset ? 'Pick a password with at least 8 characters.' : 'Use your @' + EMAIL_DOMAIN_HINT + ' email address.';
-    $('auth-email-field').hidden = reset;
-    $('auth-submit').textContent = reset ? 'Save new password' : signup ? 'Create account' : 'Sign in';
-    $('auth-pw').setAttribute('autocomplete', signup || reset ? 'new-password' : 'current-password');
-    $('auth-toggle').textContent = signup ? 'Already have an account? Sign in' : 'New here? Create an account';
-    $('auth-links').hidden = reset;
-    $('auth-forgot').hidden = signup;
-    if (!keepMsg) authMsg('');
-  }
-  function busy(on) { $('auth-submit').disabled = on; }
-  function friendly(err) {
-    var c = (err && err.code) || '', m = (err && err.message) || '';
-    if (c === 'invalid_credentials' || /invalid login/i.test(m)) return 'That email and password do not match.';
-    if (c === 'email_not_confirmed' || /not confirmed/i.test(m)) return 'Confirm your email first. Open the link we sent you, then sign in.';
-    if (c === 'over_email_send_rate_limit' || /rate limit/i.test(m)) return 'Too many emails were sent. Wait a few minutes and try again.';
-    if (c === 'weak_password' || /password should/i.test(m)) return 'Choose a longer password, at least 8 characters.';
-    if (/failed to fetch|network/i.test(m)) return 'Cannot reach Supabase. Check your connection and try again.';
-    return m || 'Something went wrong. Try again.';
-  }
-
-  $('auth-toggle').addEventListener('click', function () {
-    authMode = authMode === 'signup' ? 'signin' : 'signup';
-    setAuthMode(false);
-  });
-  $('auth-forgot').addEventListener('click', function () {
-    var email = $('auth-email').value.trim().toLowerCase();
-    if (!email) { authMsg('Type your email above first, then choose Forgot your password.'); return; }
-    authMsg('');
-    sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }).then(function (r) {
-      if (r.error) authMsg(friendly(r.error));
-      else authMsg('If that address has an account, a reset link is on its way.', true);
-    });
-  });
-  $('auth-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    if (!sb) return;
-    var email = $('auth-email').value.trim().toLowerCase();
-    var pw = $('auth-pw').value;
-    authMsg('');
-
-    if (authMode === 'reset') {
-      if (pw.length < 8) { authMsg('Use at least 8 characters.'); return; }
-      busy(true);
-      sb.auth.updateUser({ password: pw }).then(function (r) {
-        busy(false);
-        if (r.error) { authMsg(friendly(r.error)); return; }
-        authMode = 'signin'; setAuthMode(false); $('auth-pw').value = '';
-        sb.auth.getSession().then(function (s) { view = 'loading'; enter(s.data && s.data.session); });
-      });
-      return;
-    }
-    if (!email) { authMsg('Enter your email address.'); return; }
-    if (!pw) { authMsg('Enter your password.'); return; }
-
-    if (authMode === 'signup') {
-      if (!/@[^@]+$/.test(email) || email.split('@')[1] !== EMAIL_DOMAIN_HINT) { authMsg('Use your @' + EMAIL_DOMAIN_HINT + ' email address.'); return; }
-      if (pw.length < 8) { authMsg('Choose a password with at least 8 characters.'); return; }
-      busy(true);
-      sb.auth.signUp({ email: email, password: pw, options: { emailRedirectTo: window.location.origin } }).then(function (r) {
-        busy(false);
-        if (r.error) { authMsg(friendly(r.error)); return; }
-        authMode = 'signin'; setAuthMode(true); $('auth-pw').value = '';
-        authMsg('Check your inbox and confirm your email, then sign in here.', true);
-      });
-      return;
-    }
-    busy(true);
-    sb.auth.signInWithPassword({ email: email, password: pw }).then(function (r) {
-      busy(false);
-      if (r.error) authMsg(friendly(r.error));
-      // success continues in the auth state handler below
-    });
-  });
-  $('signout').addEventListener('click', function () { if (sb) sb.auth.signOut(); });
-
-  /* ---------- session handling ---------- */
-  function handleAuth(event, session) {
-    if (event === 'PASSWORD_RECOVERY') { authMode = 'reset'; setAuthMode(false); setView('recovery'); return; }
-    if (!session) { teardown(); if (authMode === 'reset') authMode = 'signin'; setAuthMode(true); setView('signin'); return; }
-    if (view === 'recovery' || event === 'TOKEN_REFRESHED') return;
-    if (view === 'app' && session.user && session.user.id === currentUserId) return;
-    enter(session);
-  }
-  function enter(session) {
-    if (!session) { setView('signin'); return; }
-    currentUserId = session.user.id;
-    $('who-email').textContent = 'Signed in as ' + (session.user.email || 'your account');
-    sb.rpc('am_i_team_member').then(function (r) {
-      if (r.error) { showBoot('Cannot check your access', 'Supabase did not answer. Reload the page to try again.'); return; }
-      if (r.data === true) { setView('app'); start(); }
-      else {
-        $('denied-text').textContent = 'Access is limited to confirmed @' + EMAIL_DOMAIN_HINT + ' accounts. If you should have access, ask whoever manages this Supabase project to add your domain.';
-        setView('denied');
-      }
-    });
-  }
+  /* ---------- page state ---------- */
   function showBoot(title, text) {
+    view = 'error';
     $('boot-title').textContent = title; $('boot-text').textContent = text;
-    $('boot').hidden = false;
-    ['auth', 'denied', 'app'].forEach(function (id) { $(id).hidden = true; });
-  }
-  function expireSession() {
-    teardown();
-    authMode = 'signin'; setAuthMode(false);
-    authMsg('Your session ended. Sign in again to continue.');
-    setView('signin');
-    if (sb) sb.auth.signOut();
+    $('boot').hidden = false; $('app').hidden = true;
   }
 
   /* ---------- data ---------- */
@@ -562,12 +388,7 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
       var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
     });
   }
-  function isAuthErr(err) {
-    return !!err && (err.code === 'PGRST301' || err.status === 401 || /jwt/i.test(err.message || ''));
-  }
-
   function onError(err, isRead) {
-    if (isAuthErr(err)) { expireSession(); return; }
     if (isRead && !retried) { retried = true; setTimeout(function () { refresh(false); }, 2000 + Math.random() * 1000); }
     if (loaded) staleNote = true;
     else {
@@ -602,8 +423,7 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
       if (res.error) throw res.error;
       return true;
     }).catch(function (err) {
-      if (isAuthErr(err)) expireSession();
-      else showToast('Could not save that change. Showing what is in Supabase.', false);
+      showToast('Could not save that change. Showing what is in Supabase.', false);
       return false;
     }).then(function (ok) {
       pending--;
@@ -625,12 +445,6 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
       .subscribe();
   }
   function unsubscribe() { if (channel && sb) { sb.removeChannel(channel); } channel = null; }
-  function teardown() {
-    unsubscribe(); clearTimeout(rtTimer);
-    actions = []; loaded = false; status = null; staleNote = false; currentUserId = null; lastDeleted = null;
-    hideToast();
-  }
-
   /* ---------- tiny DOM helper ---------- */
   function h(tag, props) {
     var el = document.createElement(tag);
@@ -862,18 +676,11 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
   try { var f = localStorage.getItem(FILTER_KEY); if (f === 'all' || f === 'open' || f === 'overdue') filter = f; } catch (e) {}
   els.due.value = iso(addDays(new Date(), 7));
   els.today.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  setAuthMode(false);
-
   if (!sb) {
-    sbFailure = true;
     showBoot('Could not load the page', 'The Supabase library did not load. Check your connection and reload.');
     return;
   }
-  setView('loading');
-  sb.auth.onAuthStateChange(function (event, session) {
-    // Defer: calling Supabase inside this callback can deadlock the client.
-    setTimeout(function () { handleAuth(event, session); }, 0);
-  });
+  start();
 })();
 </script>
 </body>

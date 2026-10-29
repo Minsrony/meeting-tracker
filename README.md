@@ -2,13 +2,13 @@
 
 A small static web app for a team that keeps forgetting agreed actions. Add an action with an owner and a due date, see actions grouped by owner with a tick box, and watch open, done and overdue counts update live. Overdue actions show in red.
 
-It is a single `index.html` with no build step. Data lives in Supabase, and people sign in with an email address on an allowed domain.
+It is a single `index.html` with no build step and no sign-in. Data lives in Supabase.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | The whole app: sign-in, tracker, Supabase client. |
+| `index.html` | The whole app. |
 | `vercel.json` | Security headers and a Content Security Policy for Vercel. |
 | `supabase/setup.sql` | Table, access rules and live-update setup for a fresh Supabase project. |
 | `.gitignore` | Keeps local Vercel and env files out of Git. |
@@ -19,30 +19,22 @@ It is a single `index.html` with no build step. Data lives in Supabase, and peop
 2. Set **Framework Preset** to **Other**. Leave Build Command, Output Directory and Install Command empty.
 3. Deploy. Vercel serves `index.html` from the repository root.
 
-## Supabase settings to check (Authentication section of the dashboard)
+No environment variables are needed. There is nothing to configure in Supabase's Authentication settings either, because the app does not sign anyone in.
 
-- **Confirm email must stay ON.** Access is limited by email domain, and confirmation is what proves a person owns the mailbox. With it off, anyone could sign up as `someone@yourdomain.com`.
-- **Site URL and Redirect URLs:** set the Site URL to your Vercel address (for example `https://meeting-tracker.vercel.app`) and add the same address under Redirect URLs. Confirmation and password reset emails link back there. Add preview or custom domains here too.
-- **Email sending:** Supabase's built-in sender is limited to a few emails per hour. For a team, add your own SMTP provider under Authentication, Emails, SMTP settings.
-- **Minimum password length:** the page asks for 8 characters. You can raise it in Authentication settings.
+## Who can see and edit actions
 
-## Who can sign in
+Anyone who has the link. The Supabase URL and publishable key are visible in the page source, and the database rules allow that key to read, add, edit and delete every row in `meeting_actions`. That is the only table those rules touch.
 
-Only confirmed accounts whose email domain is listed in `private.allowed_domains` can read or change actions. Everyone else, including requests using only the publishable key, is refused by the database.
+What that means in practice:
 
-```sql
--- add a domain
-insert into private.allowed_domains (domain) values ('example.com');
+- Share the link only with people you are happy to have editing the list.
+- Anyone who finds the link, or uses the key directly, can also delete every action or fill the table with junk.
+- To recover from a mess, restore from a Supabase backup or re-run the example inserts.
 
--- remove a domain
-delete from private.allowed_domains where domain = 'example.com';
-```
-
-`EMAIL_DOMAIN_HINT` near the top of the script in `index.html` only controls the hint text and the sign-up check on the form. Update it if you change domains.
+To lock it down later, drop the four `anyone can ...` policies and revoke the grants (the bottom of `supabase/setup.sql` shows how). A version with email sign-in limited to one email domain is in the Git history at commit `253e296`.
 
 ## Notes
 
-- The project URL and publishable key in `index.html` are meant to be public. The access rules in `supabase/setup.sql` are what protect the data, so do not weaken them.
 - Never put a Supabase `service_role` or secret key in this repository.
 - If you change the Supabase project URL, update both `index.html` and the `connect-src` entry in `vercel.json`.
-- To preview locally, run `npx serve .` in this folder. Add `http://localhost:3000` to the Supabase Redirect URLs if you want email links to work locally.
+- To preview locally, run `npx serve .` in this folder.
