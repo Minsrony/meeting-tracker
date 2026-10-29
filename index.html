@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Instrument+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: one centred column. Sign-in card, or: summary, add-action card, then one card per owner. */
+/* Layout: one centred column. Summary card, add-action card, then one card per owner holding their actions. */
 :root {
   --bg: #F2F0ED;
   --card: #FBFAF8;
@@ -315,7 +315,7 @@ input[type="text"]:focus-visible, input[type="date"]:focus-visible, input[type="
   'use strict';
 
   /* Project settings. This version is open: anyone who has the link can read and change every action.
-     The publishable key is public by design; the database rules let it touch only the meeting_actions table. */
+     The publishable key is public by design. Each table in the project has its own rules, and meeting_actions is open. */
   var SUPABASE_URL = 'https://jeerscukwmcawmoddoax.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_JkOIq3bGF5fHrFLVFwfRNg_p19u-bcW';
 

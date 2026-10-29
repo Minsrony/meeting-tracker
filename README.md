@@ -23,7 +23,7 @@ No environment variables are needed. There is nothing to configure in Supabase's
 
 ## Who can see and edit actions
 
-Anyone who has the link. The Supabase URL and publishable key are visible in the page source, and the database rules allow that key to read, add, edit and delete every row in `meeting_actions`. That is the only table those rules touch.
+Anyone who has the link. The Supabase URL and publishable key are visible in the page source, and the database rules allow that key to read, add, edit and delete every row in `meeting_actions`. Other tables in the same Supabase project have their own rules, and the key can use anything those rules make public (check them in the Supabase dashboard under Authentication, Policies).
 
 What that means in practice:
 
